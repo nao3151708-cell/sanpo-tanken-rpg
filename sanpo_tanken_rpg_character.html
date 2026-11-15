@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>散歩探検RPG — 成長版</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--forest:#24664c;--pale:#eaf2e4;--gold:#bd8719}
+*{box-sizing:border-box}body{margin:0;background:var(--pale);color:#204334;font-family:system-ui,"Yu Gothic",sans-serif}
+header{background:var(--forest);color:white;padding:16px}h1{font-size:23px;margin:0}main{max-width:760px;margin:auto;padding:12px}
+.card{background:#fffdf5;border:1px solid #d6dfc9;border-radius:16px;padding:14px;margin-bottom:12px}
+#map{height:44vh;min-height:300px;border-radius:12px}.row{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;align-items:center}
+button{border:0;border-radius:10px;padding:12px;font-weight:bold;background:var(--forest);color:white;font-size:15px;cursor:pointer}button:disabled{opacity:.4}.gold{background:var(--gold)}
+.status{background:#eaf3e8;padding:12px;border-radius:10px;line-height:1.6}.small{font-size:12px;line-height:1.6;color:#587064}
+.stat{background:#edf4e8;padding:7px 10px;border-radius:99px;font-size:13px}
+.hero{display:flex;gap:14px;align-items:center}.avatar{width:86px;height:100px;border-radius:18px;background:#e8f0db;display:flex;align-items:center;justify-content:center;font-size:54px;border:1px solid #d6dfc9;flex-shrink:0}
+.level{font-size:22px;font-weight:800}.xpbar{height:12px;background:#e7e1cb;border-radius:99px;overflow:hidden;margin:7px 0}.xpfill{height:100%;width:0;background:#d9a52e;transition:width .25s}
+.statsgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.statbox{background:#edf4e8;border-radius:12px;padding:10px;text-align:center}.statbox b{display:block;font-size:20px}.notice{font-size:13px;background:#fff3d5;border-radius:10px;padding:10px;line-height:1.5}.avatar img{width:100%;height:100%;object-fit:cover;border-radius:17px}.choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.choice{background:#edf4e8;color:#204334;border:2px solid transparent;padding:10px 6px}.choice.selected{border-color:#24664c;background:#dcebd8}.choice .face{font-size:30px;display:block;margin-bottom:4px}.photo-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}input[type=file]{max-width:100%;font-size:13px}
+@media(max-width:420px){.hero{align-items:flex-start}.avatar{width:72px;height:84px;font-size:44px}.statsgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<header><h1>🌿 散歩探検RPG</h1><div>GPS試作版 0.2 — 歩いて、見つけて、成長しよう</div></header>
+<main>
+<section class="card">
+<div class="hero">
+ <div class="avatar" id="avatar" aria-label="冒険者">🧑‍🌾</div>
+ <div style="flex:1;min-width:0"><div class="small">あなたの冒険者</div><div class="level" id="level">Lv.1 見習い探索者</div><div><b id="xpText">経験値 0 XP</b> <span class="small" id="nextText">/ 次のレベルまで 100 XP</span></div><div class="xpbar"><div class="xpfill" id="xpbar"></div></div><div class="small" id="lookText">冒険を重ねると装備が変わるよ</div></div>
+</div>
+</section>
+<section class="card">
+<b>🧑‍🚀 冒険者をカスタマイズ</b>
+<p class="small">好きなキャラクターを選ぶか、自分の写真からオリジナルの顔アイコンを作れるよ。</p>
+<div class="choices" id="characterChoices">
+<button class="choice selected" data-character="🧑‍🌾" data-name="旅人"><span class="face">🧑‍🌾</span>旅人</button>
+<button class="choice" data-character="🧙" data-name="魔法使い"><span class="face">🧙</span>魔法使い</button>
+<button class="choice" data-character="🛡️" data-name="守護者"><span class="face">🛡️</span>守護者</button>
+<button class="choice" data-character="🏹" data-name="狩人"><span class="face">🏹</span>狩人</button>
+<button class="choice" data-character="🥷" data-name="忍び"><span class="face">🥷</span>忍び</button>
+<button class="choice" data-character="🧝" data-name="森の民"><span class="face">🧝</span>森の民</button>
+</div>
+<div class="photo-actions" style="margin-top:12px"><label class="small" for="photoInput">📷 写真を撮影・選択：</label><input id="photoInput" type="file" accept="image/*" capture="user"></div>
+<div class="row"><button id="removePhoto" type="button" style="background:#65776d">写真を外して選択キャラに戻す</button></div>
+<p class="small">写真はこの端末のブラウザ内で小さなアイコンに加工して保存します。外部サーバーには送信しません。共有端末では写真の扱いに注意してね。</p>
+</section>
+<section class="card">
+<div class="row"><span class="stat" id="gps">📍 GPS：未開始</span><span class="stat" id="dist">🧭 宝箱まで：—</span></div>
+<div id="map"></div>
+<div class="row"><button id="locate">📍 現在地を取得</button><button id="focus" disabled>🧭 宝箱の方向へ</button><button id="open" class="gold" disabled>🎁 宝箱を開ける</button></div>
+<div style="height:9px;background:#e7e1cb;border-radius:99px;overflow:hidden"><div id="progress" style="height:100%;width:0;background:#d9a52e"></div></div>
+<p class="status" id="msg"><b>冒険の準備はOK？</b><br>「現在地を取得」を押して、位置情報を許可してね。現在地から約100m北にテスト用の宝箱が現れるよ。</p>
+<p class="small" id="coords">現在地の座標は、位置情報を取得すると表示されます。</p>
+</section>
+<section class="card"><b>🎒 今日の冒険</b>
+<p>👣 GPS移動距離：<strong id="walk">0 m</strong>　／　✨ 宝箱：<strong id="found">0 / 1</strong></p>
+<div class="notice">経験値のルール：宝箱を開けると50 XP、GPSで歩行距離が合計100m増えるごとに10 XP。レベルが上がると能力値と見た目が成長します。</div>
+</section>
+<section class="card"><b>🧭 冒険者の能力</b>
+<div class="statsgrid" style="margin-top:10px">
+<div class="statbox">💪 体力<b id="stamina">1</b><span class="small">歩行の記録</span></div>
+<div class="statbox">🔎 探索力<b id="explore">1</b><span class="small">発見の経験</span></div>
+<div class="statbox">🍀 幸運<b id="luck">1</b><span class="small">冒険の積み重ね</span></div>
+</div>
+<p class="small">能力値はレベルに応じて上がる試作仕様です。今後、探索力や幸運をゲーム内の発見率などに連動させられます。</p>
+<div class="row"><button id="reset" style="background:#65776d">成長記録をリセット</button></div>
+<p class="small">遊び方：①現在地を取得 ②地図上の🎁を探す ③半径25m以内で宝箱を開く。安全のため立ち止まってから画面を操作してね。GPSはHTTPSのページで動作します。</p>
+</section>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const STORAGE='sanpoTankenRpgGrowthV1';
+const fresh=()=>({xp:0,level:1,walked:0,walkXpProgress:0,opened:false,chestLat:null,chestLng:null,character:'🧑‍🌾',characterName:'旅人',photo:null});
+let state=fresh();
+try{const saved=JSON.parse(localStorage.getItem(STORAGE)||'null');if(saved&&typeof saved==='object')state={...fresh(),...saved}}catch(e){}
+let user=null,accuracy=null,chest=null,chestLL=null,last=null,watch=null;
+let walked=Number(state.walked)||0, opened=!!state.opened;
+function save(){state.walked=walked;state.opened=opened;if(chestLL){state.chestLat=chestLL.lat;state.chestLng=chestLL.lng}try{localStorage.setItem(STORAGE,JSON.stringify(state))}catch(e){}}
+function msg(title,body){$('msg').innerHTML='<b>'+title+'</b><br>'+body}
+function meters(a,b){return map.distance(a,b)}
+function pointAt(origin,m,bearing){const R=6378137,br=bearing*Math.PI/180,lat=origin.lat*Math.PI/180,lon=origin.lng*Math.PI/180,d=m/R;const lat2=Math.asin(Math.sin(lat)*Math.cos(d)+Math.cos(lat)*Math.sin(d)*Math.cos(br));const lon2=lon+Math.atan2(Math.sin(br)*Math.sin(d)*Math.cos(lat),Math.cos(d)-Math.sin(lat)*Math.sin(lat2));return L.latLng(lat2*180/Math.PI,lon2*180/Math.PI)}
+function xpForNext(level){return level*100}
+function addXP(amount,reason){const old=state.level;state.xp+=amount;while(state.xp>=xpForNext(state.level)){state.xp-=xpForNext(state.level);state.level++}save();render();if(state.level>old)msg('🎉 レベルアップ！','Lv.'+state.level+' になったよ！ 能力値と見た目が成長したよ。');else msg('✨ 経験値を獲得！',reason+'（+'+amount+' XP）')}
+function render(){
+ const lv=state.level||1, need=xpForNext(lv);
+ const titles=lv>=10?'熟練冒険者':lv>=5?'野外探索者':'見習い探索者';
+ $('level').textContent='Lv.'+lv+' '+titles;$('xpText').textContent='経験値 '+state.xp+' XP';$('nextText').textContent='/ 次のレベルまで '+Math.max(0,need-state.xp)+' XP';$('xpbar').style.width=Math.min(100,state.xp/need*100)+'%';
+ if(state.photo){$('avatar').innerHTML='<img alt="自分のキャラクター" src="'+state.photo+'">'}else{$('avatar').textContent=state.character||'🧑‍🌾'}$('lookText').textContent=(state.characterName||'旅人')+'として冒険中 · '+(lv>=10?'熟練者の姿に成長！':lv>=5?'冒険装備が整ってきた！':'宝箱や散歩で経験値を集めよう');
+ $('stamina').textContent=lv;$('explore').textContent=lv;$('luck').textContent=Math.max(1,Math.floor((lv+1)/2));
+ $('walk').textContent=Math.round(walked)+' m';$('found').textContent=(opened?'1':'0')+' / 1';
+}
+const map=L.map('map').setView([34.9756,138.3828],14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+const userIcon=L.divIcon({className:'',html:'<div style="width:18px;height:18px;border-radius:50%;background:#2384d8;border:4px solid white;box-shadow:0 0 0 2px #2384d8"></div>',iconSize:[26,26],iconAnchor:[13,13]});
+const chestIcon=L.divIcon({className:'',html:'<div style="font-size:34px">🎁</div>',iconSize:[38,38],iconAnchor:[19,30]});
+const openIcon=L.divIcon({className:'',html:'<div style="font-size:34px">✨</div>',iconSize:[38,38],iconAnchor:[19,30]});
+function updateDistance(){if(!last||!chestLL)return;let d=Math.round(meters(last,chestLL));$('dist').textContent='🧭 宝箱まで：約'+d+'m';$('progress').style.width=Math.max(0,Math.min(100,(1-d/100)*100))+'%';$('open').disabled=opened||d>25;if(opened)msg('🎉 宝箱を発見！','宝箱の経験値を獲得済みだよ。');else if(d<=25)msg('✨ 宝箱がすぐ近くにあるよ！','安全な場所で立ち止まって「宝箱を開ける」を押してね。');else if(d<70)msg('🔎 宝箱が近づいてきた！','あと約'+d+'m。安全な道を選んで進もう。')}
+function position(pos){
+ const ll=L.latLng(pos.coords.latitude,pos.coords.longitude);
+ if(last){const d=meters(last,ll);if(d>2&&d<100){walked+=d;state.walkXpProgress=(Number(state.walkXpProgress)||0)+d;while(state.walkXpProgress>=100){state.walkXpProgress-=100;addXP(10,'100m歩いたよ');}}}
+ $('walk').textContent=Math.round(walked)+' m';last=ll;
+ if(!user)user=L.marker(ll,{icon:userIcon}).addTo(map).bindPopup('📍 現在地');else user.setLatLng(ll);
+ if(!accuracy)accuracy=L.circle(ll,{radius:Math.max(5,pos.coords.accuracy||20),color:'#2384d8',fillOpacity:.1,weight:1}).addTo(map);else{accuracy.setLatLng(ll);accuracy.setRadius(Math.max(5,pos.coords.accuracy||20))}
+ $('coords').textContent='現在地：'+ll.lat.toFixed(5)+', '+ll.lng.toFixed(5)+' ／ GPS精度の目安：約'+Math.round(pos.coords.accuracy||0)+'m';
+ if(chestLL)updateDistance();save();render();
+}
+function error(e){$('locate').disabled=false;$('gps').textContent='📍 GPS：取得できず';let t=e.code===1?'位置情報が許可されていません。ブラウザのサイト設定で許可してね。':e.code===2?'現在地を取得できません。屋外などで再度試してね。':'取得に時間がかかっています。通信やGPSを確認してね。';msg('現在地を取得できなかったよ',t)}
+function drawChest(){if(chest)return;if(state.chestLat!==null&&state.chestLng!==null){chestLL=L.latLng(state.chestLat,state.chestLng)}if(chestLL){chest=L.marker(chestLL,{icon:opened?openIcon:chestIcon}).addTo(map).bindPopup(opened?'✨ 宝箱を発見！':'🎁 テスト用の宝箱：25m以内で開けられるよ')}}
+$('locate').onclick=()=>{if(!navigator.geolocation){msg('GPSが使えないみたい','このブラウザでは位置情報を利用できません。');return}if(!window.isSecureContext){$('gps').textContent='📍 GPS：HTTPSが必要';msg('安全な接続が必要です','GPSは通常HTTPSのWebページ、またはlocalhostで動作します。このHTMLをHTTPSのWebページに置いてから開いてね。');return}
+ $('locate').disabled=true;$('gps').textContent='📍 GPS：取得中…';
+ navigator.geolocation.getCurrentPosition(p=>{position(p);if(!chestLL){chestLL=pointAt(last,100,0);save()}drawChest();map.fitBounds(L.latLngBounds([last,chestLL]).pad(.4));$('gps').textContent='📍 GPS：確認済み';$('focus').disabled=false;$('locate').disabled=false;msg('宝箱が出現したよ！','地図の🎁マーカーを目指してみよう。現在地から約100m北に置いたよ。');if(watch===null)watch=navigator.geolocation.watchPosition(position,error,{enableHighAccuracy:true,maximumAge:3000,timeout:15000})},error,{enableHighAccuracy:true,maximumAge:0,timeout:15000})};
+$('focus').onclick=()=>{if(chestLL){map.fitBounds(L.latLngBounds([last,chestLL]).pad(.45));chest.openPopup();msg('宝箱の方向を確認しよう','地図の🎁マーカーが宝箱だよ。安全な道を選んで近づいてね.')}};
+$('open').onclick=()=>{if(!last||!chestLL||meters(last,chestLL)>25){msg('もう少し近づいてね','宝箱の近くまで来ると開けられるよ。');return}if(opened)return;opened=true;$('found').textContent='1 / 1';$('open').disabled=true;if(chest){chest.setIcon(openIcon);chest.setPopupContent('✨ 宝箱を発見！')}save();addXP(50,'宝箱を開けたよ')};
+$('reset').onclick=()=>{if(confirm('経験値・レベル・歩行距離・宝箱の記録をリセットしますか？')){try{localStorage.removeItem(STORAGE)}catch(e){}location.reload()}};
+window.addEventListener('pagehide',()=>{if(watch!==null)navigator.geolocation.clearWatch(watch)});
+render();
+function selectCharacter(emoji,name){state.character=emoji;state.characterName=name;state.photo=null;save();document.querySelectorAll('.choice').forEach(b=>b.classList.toggle('selected',b.dataset.character===emoji));render()}
+document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>selectCharacter(b.dataset.character,b.dataset.name)));
+$('photoInput').addEventListener('change',e=>{const file=e.target.files&&e.target.files[0];if(!file)return;if(!file.type.startsWith('image/')){alert('画像ファイルを選んでね');return}const reader=new FileReader();reader.onload=()=>{const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');canvas.width=160;canvas.height=160;const ctx=canvas.getContext('2d');const side=Math.min(img.width,img.height);ctx.drawImage(img,(img.width-side)/2,(img.height-side)/2,side,side,0,0,160,160);state.photo=canvas.toDataURL('image/jpeg',0.72);state.characterName='オリジナル';save();document.querySelectorAll('.choice').forEach(b=>b.classList.remove('selected'));render()};img.onerror=()=>alert('この画像を読み込めなかったよ');img.src=reader.result};reader.readAsDataURL(file)});
+$('removePhoto').onclick=()=>{state.photo=null;state.character='🧑‍🌾';state.characterName='旅人';save();document.querySelectorAll('.choice').forEach(b=>b.classList.toggle('selected',b.dataset.character==='🧑‍🌾'));$('photoInput').value='';render()};
+if(state.character){document.querySelectorAll('.choice').forEach(b=>b.classList.toggle('selected',b.dataset.character===state.character))}
+if(state.chestLat!==null&&state.chestLng!==null){chestLL=L.latLng(state.chestLat,state.chestLng);drawChest();$('focus').disabled=false}
+</script></body></html>
